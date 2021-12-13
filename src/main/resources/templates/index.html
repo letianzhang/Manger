@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>首页</title>
+</head>
+<body>
+<form action="#" th:action="@{/download}" method="get">
+    <button type="submit">导入模板下载</button>
+</form>
+<br/>
+<form action="#" th:action="@{/import}" method="post" enctype="multipart/form-data">
+    <input type="file" name="file">
+    <br/>
+    <label>Cookie：
+        <input type="text" name="cookie">
+    </label>
+    <br/>
+    <button type="submit">开始导入</button>
+</form>
+</body>
+</html>
