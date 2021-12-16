@@ -5,6 +5,7 @@
     <title>首页</title>
 </head>
 <body>
+<h1 th:if="${message != null}" th:text="${message}"></h1>
 <form action="#" th:action="@{/download}" method="get">
     <button type="submit">导入模板下载</button>
 </form>

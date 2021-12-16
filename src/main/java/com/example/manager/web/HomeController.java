@@ -9,14 +9,15 @@ import com.example.manager.util.PortalProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.rmi.RemoteException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -29,13 +30,13 @@ public class HomeController {
         this.portalProperties = portalProperties;
     }
 
-    @GetMapping
+    @GetMapping(value = {"/", "index"})
     public String index() {
         return "index";
     }
 
     @GetMapping("download")
-    public String download(HttpServletResponse response) throws IOException {
+    public void download(HttpServletResponse response) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
         String fileName = URLEncoder.encode("导入模板", "UTF-8").replaceAll("\\+", "%20");
@@ -57,20 +58,17 @@ public class HomeController {
         excelDTO.setApi("/web/personInfo/*\n/web/personInfo/*\n/disease/*");
         exampleList.add(excelDTO);
         EasyExcel.write(response.getOutputStream(), ExcelDTO.class).sheet("模板").doWrite(exampleList);
-        return "redirect:index";
     }
 
     @PostMapping("import")
-    public String startImport(MultipartFile file, Model model) throws IOException {
+    public String startImport(MultipartFile file, RedirectAttributes redirectAttributes) throws IOException {
         List<ExcelDTO> list = EasyExcel.read(file.getInputStream()).head(ExcelDTO.class).sheet().doReadSync();
         if (CollectionUtils.isEmpty(list)) {
-            model.addAttribute("result", "Excel为空！");
-            return "import_result";
+            throw new RuntimeException("Excel为空！");
         }
         Set<String> subSysNameSet = list.stream().map(ExcelDTO::getSubsysName).collect(Collectors.toSet());
         if (subSysNameSet.size() > 2) {
-            model.addAttribute("result", "仅支持一次导入一个子系统下的所有菜单！");
-            return "import_result";
+            throw new RuntimeException("仅支持一次导入一个子系统下的所有菜单！");
         }
         // 根据子系统名称查询子系统信息
         String baseUrl = portalProperties.getUrl();
@@ -78,8 +76,7 @@ public class HomeController {
         String s = OkHttpUtils.get(querySubSysUrl, portalProperties.getCookie(), portalProperties.getToken());
         SubsystemDTO subsystemDTO = JSONObject.parseObject(s, SubsystemDTO.class);
         if (!Objects.equals(subsystemDTO.getCode(), CustomConstant.CODE_SUCCESS)) {
-            model.addAttribute("result", subsystemDTO.getMessage());
-            return "import_result";
+            throw new RemoteException(subsystemDTO.getMessage());
         }
         // 后续新增的菜单也需要向该map中写入
         Map<String, String> menuNameToIdMap = new HashMap<>();
@@ -99,8 +96,7 @@ public class HomeController {
             String addMenuResult = OkHttpUtils.post(addMenuUrl, portalProperties.getCookie(), portalProperties.getToken(), JSONObject.toJSONString(dto));
             AddMenuResultDTO addMenuResultDTO = JSONObject.parseObject(addMenuResult, AddMenuResultDTO.class);
             if (!Objects.equals(addMenuResultDTO.getCode(), CustomConstant.CODE_SUCCESS)) {
-                model.addAttribute("result", addMenuResultDTO.getMessage());
-                return "import_result";
+                throw new RuntimeException(addMenuResultDTO.getMessage());
             }
             menuNameToIdMap.put(item.getResuName(), addMenuResultDTO.getData().getResuId());
 
@@ -112,8 +108,7 @@ public class HomeController {
             String functionResult = OkHttpUtils.get(queryFunctionUrl, portalProperties.getCookie(), portalProperties.getToken());
             FunctionDTO functionDTO = JSONObject.parseObject(functionResult, FunctionDTO.class);
             if (!Objects.equals(functionDTO.getCode(), CustomConstant.CODE_SUCCESS)) {
-                model.addAttribute("result", functionDTO.getMessage());
-                return "import_result";
+                throw new RuntimeException(functionDTO.getMessage());
             }
             String functionId = functionDTO.getData().get(0).getResuId();
             String[] apis = item.getApi().trim().split(CustomConstant.menuApiSeparateChar);
@@ -127,12 +122,11 @@ public class HomeController {
                 String apiResult = OkHttpUtils.post(addMenuUrl, portalProperties.getCookie(), portalProperties.getToken(), JSONObject.toJSONString(apiDTO));
                 AddApiResultDTO addApiResultDTO = JSONObject.parseObject(apiResult, AddApiResultDTO.class);
                 if (!Objects.equals(addApiResultDTO.getCode(), CustomConstant.CODE_SUCCESS)) {
-                    model.addAttribute("result", addApiResultDTO.getMessage());
-                    return "import_result";
+                    throw new RemoteException(addApiResultDTO.getMessage());
                 }
             }
         }
-        model.addAttribute("result", "导入成功");
-        return "import_result";
+        redirectAttributes.addFlashAttribute("message", "导入成功");
+        return "redirect:index";
     }
 }

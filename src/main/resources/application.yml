@@ -2,3 +2,6 @@ portal:
   url:
   cookie:
   token:
+server:
+  error:
+    include-stacktrace: always
